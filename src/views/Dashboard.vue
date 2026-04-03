@@ -58,9 +58,9 @@
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <div v-for="classItem in classes" :key="classItem.id" class="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
           <h3 class="font-semibold text-text-primary mb-2">{{ classItem.name }}</h3>
-          <p class="text-sm text-text-secondary mb-3">{{ classItem.courseCode }}</p>
+          <p class="text-sm text-text-secondary mb-3">{{ classItem.course_code }}</p>
           <div class="flex justify-between items-center text-sm">
-            <span class="text-text-secondary">{{ classItem.studentCount }} students</span>
+            <span class="text-text-secondary">{{ classItem.student_count || 0 }} students</span>
             <span class="px-2 py-1 text-xs font-medium rounded-full bg-success/20 text-success">
               Active
             </span>
@@ -134,12 +134,10 @@ const classes = computed(() => attendanceStore.classes)
 const totalStudents = computed(() => attendanceStore.totalStudents)
 const activeSessions = computed(() => attendanceStore.activeSessions.length)
 const todayRate = computed(() => {
-  const todaySessions = attendanceStore.todaySessions
-  if (todaySessions.length === 0) return 0
-  
-  const totalPresent = todaySessions.reduce((sum, session) => sum + session.presentCount, 0)
-  const totalPossible = todaySessions.reduce((sum, session) => sum + session.totalStudents, 0)
-  
+  const today = attendanceStore.todaySessions
+  if (today.length === 0) return 0
+  const totalPresent = today.reduce((sum, s) => sum + (parseInt(s.present_count) || 0), 0)
+  const totalPossible = today.reduce((sum, s) => sum + (parseInt(s.total_students) || 0), 0)
   return totalPossible > 0 ? Math.round((totalPresent / totalPossible) * 100) : 0
 })
 </script>

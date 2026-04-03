@@ -6,11 +6,14 @@
 
 // Database Configuration
 // TODO: Update these values with your actual database credentials
-define('DB_HOST', 'localhost');           // Usually 'localhost' or '127.0.0.1'
-define('DB_NAME', 'attendsense');         // Database name created in Step 1
-define('DB_USER', 'root');               // Your MySQL username
-define('DB_PASS', '');  // Your MySQL password - EMPTY since no password set
-define('DB_CHARSET', 'utf8mb4');
+// define('DB_HOST', 'localhost');           // Not needed for SQLite
+// define('DB_NAME', 'attendsense');         // Not needed for SQLite
+// define('DB_USER', 'root');               // Not needed for SQLite
+// define('DB_PASS', '');  // Not needed for SQLite
+// define('DB_CHARSET', 'utf8mb4');         // Not needed for SQLite
+
+// SQLite Database Configuration
+define('DB_FILE', __DIR__ . '/../../database/attendsense.sqlite');
 
 // API Configuration
 define('API_BASE_URL', 'http://localhost/attendsense/backend/api');
@@ -31,7 +34,7 @@ header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
 
 // Handle preflight requests
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+if (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit(0);
 }
 
@@ -42,17 +45,28 @@ class Database {
 
     private function __construct() {
         try {
-            $dsn = "mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=" . DB_CHARSET;
-            $options = [
-                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-                PDO::ATTR_EMULATE_PREPARES => false,
-            ];
-            
-            $this->connection = new PDO($dsn, DB_USER, DB_PASS, $options);
+            // Create SQLite database directory if it doesn't exist
+            $dbDir = dirname(DB_FILE);
+            if (!is_dir($dbDir)) {
+                mkdir($dbDir, 0755, true);
+            }
+
+            $this->connection = new PDO('sqlite:' . DB_FILE);
+            $this->connection->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+            $this->connection->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+
+            // Enable foreign keys
+            $this->connection->exec('PRAGMA foreign_keys = ON;');
+
+            // Optimize SQLite settings
+            $this->connection->exec('PRAGMA journal_mode = WAL;');
+            $this->connection->exec('PRAGMA synchronous = NORMAL;');
+            $this->connection->exec('PRAGMA cache_size = 1000;');
+            $this->connection->exec('PRAGMA temp_store = memory;');
+
         } catch (PDOException $e) {
             http_response_code(500);
-            echo json_encode(['error' => 'Database connection failed: ' . $e->getMessage()]);
+            echo json_encode(['error' => 'SQLite database connection failed: ' . $e->getMessage()]);
             exit;
         }
     }
@@ -81,12 +95,11 @@ class ApiResponse {
         exit;
     }
 
-    public static function error($message, $code = 400) {
+    public static function error($message, $code = 400, $extra = []) {
         http_response_code($code);
-        echo json_encode([
-            'success' => false,
-            'error' => $message
-        ]);
+        $response = ['success' => false, 'error' => $message];
+        if (!empty($extra)) $response = array_merge($response, $extra);
+        echo json_encode($response);
         exit;
     }
 
@@ -195,7 +208,9 @@ function validateInput($data, $rules) {
     }
     
     if (!empty($errors)) {
-        ApiResponse::error('Validation failed', 400, ['errors' => $errors]);
+        http_response_code(400);
+        echo json_encode(['success' => false, 'error' => 'Validation failed', 'errors' => $errors]);
+        exit;
     }
     
     return $data;
